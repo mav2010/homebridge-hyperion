@@ -23,7 +23,7 @@ function HyperionAccessory(log, config) {
     this.lightService;
     this.ambiService;
     this.infoService;
-    this.log("Starting Hyperion Accessory");
+    this.log("Starting Hyperion NG Accessory");
    }
 
 HyperionAccessory.prototype.sendHyperionCommand = function (command, color, callback) {
@@ -32,34 +32,68 @@ HyperionAccessory.prototype.sendHyperionCommand = function (command, color, call
 
     switch (command) {
         case 'powerMode':
-            commands.push({
-                command: "clearall"
-            });
-            commands.push({
-                command: "color",
-                priority: this.priority,
-                color: color.rgbArray()
-            });
-            commands.push({
-                command: "transform",
-                transform: {
-                    blacklevel: [0, 0, 0],
-                    whitelevel: [1, 1, 1]
-                }
-            });
+           if (color.value() == 0){
+                commands.push({
+                    command: "clearall"
+                });
+                commands.push({
+                    command: "componentstate",
+                    componentstate: {
+                        component: "ALL",
+                        state: false
+                    }
+                });                
+            } else {
+                commands.push({
+                    command: "componentstate",
+                    componentstate: {
+                        component: "ALL",
+                        state: true
+                    }
+                });                
+                commands.push({
+                    command: "clearall"
+                });
+                commands.push({
+                    command: "color",
+                    priority: this.priority,
+                    color: color.rgbArray(),
+                    origin: "homebridge-hyperion"
+                });
+            }
             break;
         case 'color':
             commands.push({
                 command: "color",
                 priority: this.priority,
-                color: color.rgbArray()
+                color: color.rgbArray(),
+                origin: "homebridge-hyperion"
             });
             break;
-        case 'ambilight':
+        case 'ambilight_on':
             commands.push({
                 command: "clearall"
             });
+            commands.push({
+                command: "componentstate",
+                componentstate: {
+                    component: "ALL",
+                    state: true
+                }
+            });
             break;
+        case 'ambilight_off':
+            commands.push({
+                command: "clearall"
+            });
+            commands.push({
+                command: "componentstate",
+                componentstate: {
+                    component: "ALL",
+                    state: false
+                }
+            });
+            break;    
     }
 
     client.connect(this.port, this.host, function () {
@@ -68,7 +102,9 @@ HyperionAccessory.prototype.sendHyperionCommand = function (command, color, call
             client.write(JSON.stringify(current_command) + "\n");
         }
         client.end();
-        this.log("Current Color(RGB): " + color.rgbArray());
+        if (color.value() != 0) {
+            this.log("Current Color(RGB): " + color.rgbArray());
+        }
         callback(null, color);
     }.bind(this));
 
@@ -93,7 +129,7 @@ HyperionAccessory.prototype.setPowerState = function (state, callback) {
         if (!err) {
             if (this.ambi_name && state) {
                 this.ambiService.updateCharacteristic(Characteristic.On, 0);
-                this.log("Setting ambi state to: " + 0);
+                this.log("Setting Hyperion Switch state to: " + false);
             }
             this.color.rgb(new_color.rgb());
             if (state) {
@@ -111,7 +147,7 @@ HyperionAccessory.prototype.setBrightness = function (level, callback) {
         if (!err) {
             if (this.ambi_name) {
                 this.ambiService.updateCharacteristic(Characteristic.On, 0);
-                this.log("Setting ambi state to: " + 0);
+                this.log("Setting Hyperion Switch state to: " + false);
             }
             if (level > 0) {
                 this.lightService.updateCharacteristic(Characteristic.On, 1);
@@ -164,17 +200,16 @@ HyperionAccessory.prototype.setAmbiState = function (state, callback) {
     var command;
 
     if (state) {
-        command = 'ambilight';
+        command = 'ambilight_on';
     } else {
-        command = 'powerMode';
+        command = 'ambilight_off';
     }
 
     this.sendHyperionCommand(command, Color().value(0), function (err, new_color) {
         if (!err) {
-            this.log("Setting ambi state to: " + state);
+            this.log("Setting Hyperion Switch state to: " + state);
             if (state) {
                 this.lightService.updateCharacteristic(Characteristic.On, 0);
-                this.log("Setting power state on the '" + this.name + "' to off");
             }
             this.color.value(0);
         }
